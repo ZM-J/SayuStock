@@ -429,6 +429,9 @@ def gdf(df: pd.DataFrame, series: KlineSeries) -> str | Image.Image:
     title_name = series.symbol.name or "Price Forecast"
     return draw_forecast_chart(
         title=f"{title_name} (含回测与预测)",
+        tokenizer=run_cfg.tokenizer,
+        model=run_cfg.model,
+        device=device,
         hist_t=list(hist_t),
         hist_y=hist_close.to_numpy(),
         backtest_t=list(backtest_t_plotting),

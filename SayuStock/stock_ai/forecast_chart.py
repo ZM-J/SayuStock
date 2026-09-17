@@ -52,6 +52,9 @@ def _as_floats(values: Sequence[object] | NDArray[np.floating]) -> NDArray[np.fl
 def draw_forecast_chart(
     *,
     title: str,
+    tokenizer: str = "",
+    model: str = "",
+    device: str = "",
     hist_t: Sequence[object],
     hist_y: Sequence[object] | NDArray[np.floating],
     backtest_t: Sequence[object],
@@ -110,7 +113,19 @@ def draw_forecast_chart(
         ax.axvline(fu_x0, color="#d62728", linestyle="--", linewidth=1.6)
         ax.text(fu_x0, 1.01, "预测开始", transform=ax.get_xaxis_transform(), color="#d62728", ha="left", va="bottom")
 
-    ax.set_title(title, fontsize=22, color="#222222", pad=16)
+    note_parts: list[str] = []
+    if model:
+        note_parts.append(f"模型: {model}")
+    if tokenizer:
+        note_parts.append(f"Tokenizer: {tokenizer}")
+    if device:
+        note_parts.append(f"设备: {device}")
+    if note_parts:
+        fig.suptitle(title, fontsize=22, color="#222222")
+        # pad 要压过轴顶「回测/预测开始」注释（y=1.01 起）的字高，副标题才不压字
+        ax.set_title(" | ".join(note_parts), fontsize=13, color="#666666", pad=26)
+    else:
+        ax.set_title(title, fontsize=22, color="#222222", pad=16)
     ax.set_xlabel("时间", fontsize=14, color="#333333")
     ax.set_ylabel("价格", fontsize=14, color="#333333")
     ax.grid(True, color=_GRID, linewidth=0.6, alpha=0.85)

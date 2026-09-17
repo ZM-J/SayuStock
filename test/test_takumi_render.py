@@ -4,13 +4,18 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from PIL import Image
+
 from SayuStock.stock_ai.forecast_chart import draw_forecast_chart
 
 
-def test_forecast_chart_png_header() -> None:
+def _render_sample(*, tokenizer: str = "", model: str = "", device: str = "") -> Image.Image:
     times = [datetime(2026, 1, 1, 10, i) for i in range(8)]
-    img = draw_forecast_chart(
+    return draw_forecast_chart(
         title="测试股 (含回测与预测)",
+        tokenizer=tokenizer,
+        model=model,
+        device=device,
         hist_t=times[:6],
         hist_y=[10, 10.2, 10.1, 10.4, 10.3, 10.5],
         backtest_t=times[3:6],
@@ -25,5 +30,19 @@ def test_forecast_chart_png_header() -> None:
         backtest_start=times[3],
         future_start=times[5],
     )
+
+
+def test_forecast_chart_png_header() -> None:
+    img = _render_sample(
+        tokenizer="NeoQuasar/Kronos-Tokenizer-base",
+        model="NeoQuasar/Kronos-mini",
+        device="cpu",
+    )
+    assert img.size[0] > 100
+    assert img.size[1] > 80
+
+
+def test_forecast_chart_without_model_note() -> None:
+    img = _render_sample()
     assert img.size[0] > 100
     assert img.size[1] > 80

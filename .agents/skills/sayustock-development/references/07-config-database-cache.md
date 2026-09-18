@@ -33,7 +33,7 @@ STOCK_CONFIG = StringConfig("SayuStock", CONFIG_PATH, CONFIG_DEFAULT)
 | `eastmoney_cookie` | 东财 Cookie | 内置字符串 |
 | `holdings_analysis_unlimited_users` | 持仓分析免每日限额的 `user_id` 列表；网页控制台改完热生效 | `[]` |
 | `news_push_hourly_groups` | 雪球新闻「小时汇总」群列表（类别2，每小时整点合并推送） | `[]` |
-| `news_push_trading_session_groups` | 雪球新闻「交易时段汇总」群列表（类别3，每日 08/12/16 点合并推送） | `[]` |
+| `news_push_trading_session_groups` | 雪球新闻「交易时段汇总」群列表（类别3，每日 08/12/16/22 点合并推送：隔夜/午间/收盘/晚间） | `[]` |
 | `news_push_daily_groups` | 雪球新闻「每日汇总」群列表（类别4，每日 08:00 合并推送） | `[]` |
 
 三个推送分级列表由 `stock_config.py` 实例级包装 `STOCK_CONFIG.set_config`：保存任一列表后

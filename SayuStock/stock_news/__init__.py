@@ -15,13 +15,14 @@ from gsuid_core.utils.database.models import Subscribe
 
 from ..utils.models import ItemType
 from ..utils.request import get_news, clean_news
+from ..utils.time_range import now_bjt
 
 sv_stock_subscribe = SV("订阅新闻", pm=2, area="GROUP")
 
 TASK_NAME = "雪球新闻订阅"
 
 # ── 推送分级 ──
-# 1=逐条实时推送（默认，未归类的群）；2=小时汇总；3=交易时段(08/12/16点)汇总；4=每日(08点)汇总
+# 1=逐条实时推送（默认，未归类的群）；2=小时汇总；3=交易时段(08/12/16/22点)汇总；4=每日(08点)汇总
 CATEGORY_REALTIME = 1
 CATEGORY_HOURLY = 2
 CATEGORY_TRADING = 3
@@ -30,7 +31,7 @@ CATEGORY_DAILY = 4
 CATEGORY_DESC = {
     CATEGORY_REALTIME: "逐条实时推送",
     CATEGORY_HOURLY: "小时汇总（每小时整点合并推送上一小时的消息）",
-    CATEGORY_TRADING: "交易时段汇总（每日 08:00 / 12:00 / 16:00 各合并推送一次）",
+    CATEGORY_TRADING: "交易时段汇总（每日 08:00 / 12:00 / 16:00 / 22:00 各合并推送一次）",
     CATEGORY_DAILY: "每日汇总（每日 08:00 合并推送一次）",
 }
 
@@ -301,10 +302,25 @@ async def push_hourly_digest() -> None:
     await _push_digest(CATEGORY_HOURLY, "小时汇总")
 
 
-# 类别3：交易时段 08:00 / 12:00 / 16:00 各推送一次
-@scheduler.scheduled_job("cron", hour="8,12,16", minute=0)
+# 类别3：交易时段汇总。分段切在 22:00 是为了把夜间睡眠段（23:00-08:00 不推送）
+# 拦腰截断，避免出现覆盖美股整个交易日的 16 小时大段：
+#   08:00 隔夜汇总（22:00-08:00，美股尾盘/收盘+清晨国际消息）
+#   12:00 午间汇总（08:00-12:00，盘前公告+集合竞价+A股上午盘）
+#   16:00 收盘汇总（12:00-16:00，A股下午盘+15:00收盘+港股收盘）
+#   22:00 晚间汇总（16:00-22:00，盘后公告密集期+欧股盘中+美股数据/开盘）
+_TRADING_SESSION_LABELS = {
+    8: "隔夜汇总",
+    12: "午间汇总",
+    16: "收盘汇总",
+    22: "晚间汇总",
+}
+
+
+@scheduler.scheduled_job("cron", hour="8,12,16,22", minute=0)
 async def push_trading_session_digest() -> None:
-    await _push_digest(CATEGORY_TRADING, "交易时段汇总")
+    # 按北京时间墙钟取时段名，避免部署时区与调度器配置不一致时标错段
+    label = _TRADING_SESSION_LABELS.get(now_bjt().hour, "交易时段汇总")
+    await _push_digest(CATEGORY_TRADING, label)
 
 
 # 类别4：每日 08:00 推送一次

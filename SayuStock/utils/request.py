@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Any, Dict, Tuple, Union, Literal, Optional
 
 from aiohttp import (
@@ -63,13 +64,15 @@ async def get_token() -> object:
             await browser.close()
 
 
+# 新闻缓存保留时长。小时/交易时段/每日汇总推送需要取到隔夜消息，
+# 不能在 00:00 整表清空，只裁掉超过该时长的旧新闻，内存仍有界
+_NEWS_RETENTION_MS = 24 * 60 * 60 * 1000
+
+
 async def clean_news() -> None:
-    global NEWS
-    NEWS = {
-        "next_max_id": 0,
-        "items": [],
-        "next_id": 0,
-    }
+    """按 created_at 裁剪新闻缓存中超过保留时长的旧条目"""
+    now_ms = int(time.time() * 1000)
+    NEWS["items"] = [i for i in NEWS["items"] if now_ms - i["created_at"] <= _NEWS_RETENTION_MS]
 
 
 async def get_news_list(

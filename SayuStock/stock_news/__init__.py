@@ -45,6 +45,13 @@ _BJT = ZoneInfo("Asia/Shanghai")
 # 用锁串行化所有取数入口
 _FETCH_LOCK = asyncio.Lock()
 
+# 出站发送全局串行化。整点时刻多个推送 job 并发运行（08:00 同时触发
+# 小时/交易时段/每日三个任务，逐条任务也可能跨整点延伸），各 job 只保证
+# 自己循环内的间隔，合起来仍会出现同一秒向多个群发出消息——QQ 风控
+# 对同账号同秒多群最敏感。所有 subscribe.send 统一走 _throttled_send，
+# 进程内任意两条新闻推送之间至少间隔 2-5s 且绝不并发。
+_SEND_LOCK = asyncio.Lock()
+
 # 进程内发送去重（不持久化，重启即清空，仅作安全网）
 # 不同群会推送相同新闻，因此以 group_id 为 key
 # 结构: group_id -> 最近发送过的 news id 队列（最多 50 条，超出自动驱逐最旧）
@@ -71,6 +78,19 @@ def _mark_sent(group_id: Optional[str], news_id: int) -> None:
         history = deque(maxlen=_SENT_HISTORY_MAX)
         _SENT_HISTORY[group_id] = history
     history.append(news_id)
+
+
+async def _throttled_send(subscribe: Subscribe, message: Union[str, List[str]]) -> None:
+    """全局串行发送单条订阅消息，发送后强制间隔 2-5s（含在锁内）。
+
+    单个群发送失败只记日志，不打断同轮其他群的推送。
+    """
+    async with _SEND_LOCK:
+        try:
+            await subscribe.send(message)
+        except Exception as e:
+            logger.error(f"[SayuStock] 雪球新闻推送到群 {subscribe.group_id} 失败: {e}")
+        await asyncio.sleep(2 + random.random() * 3)
 
 
 def _fmt_news_time(created_at: int, fmt: str = "%m-%d %H:%M") -> str:
@@ -221,8 +241,7 @@ async def send_subscribe_info() -> None:
                     if _already_sent(subscribe.group_id, new["id"]):
                         continue
                     dt_local = _fmt_news_time(new["created_at"], "%Y-%m-%d %H:%M:%S")
-                    await subscribe.send(f"【{dt_local}】雪球7x24消息\n{new['text']}")
-                    await asyncio.sleep(2 + random.random() * 3)
+                    await _throttled_send(subscribe, f"【{dt_local}】雪球7x24消息\n{new['text']}")
                     sent_max_id = max(sent_max_id, new["id"])
                     _mark_sent(subscribe.group_id, new["id"])
 
@@ -262,8 +281,7 @@ async def _send_digest(subscribe: Subscribe, items: List[ItemType], label: str) 
         batch = entries[i : i + _DIGEST_BATCH]
         if i == 0:
             batch = [header] + batch
-        await subscribe.send(batch)
-        await asyncio.sleep(2 + random.random() * 3)
+        await _throttled_send(subscribe, batch)
 
     await _update_watermark(subscribe, sent_max_id)
 
